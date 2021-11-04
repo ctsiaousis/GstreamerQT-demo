@@ -55,7 +55,8 @@ INCLUDEPATH += "C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0"
 
 
 # --------------------------------- PRE PROCESSOR VARIABLES ---------------------------------
-DEFINES += USE_GPU_ACCEL
+# Use this for GPU accelerated h264 decoding. Strangely the d3d11h264dec uses MORE CPU than avdec_h264
+# DEFINES += USE_GPU_ACCEL
 
 
 

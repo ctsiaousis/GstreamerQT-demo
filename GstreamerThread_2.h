@@ -32,7 +32,7 @@ class GstreamerThread_2 : public QThread
 public:
     explicit GstreamerThread_2(int port, QObject *parent = nullptr);
     ~GstreamerThread_2();
-    static QImage* atomicFrame;
+    static std::atomic<QImage*> atomicFrame;
     static QMutex mtxFrame;
     static QWaitCondition frameReadyCond;
     static std::atomic<int> framecount;

@@ -1,6 +1,6 @@
 #include "GstreamerThread_1.h"
 
-QImage* GstreamerThread_1::atomicFrame;
+std::atomic<QImage*> GstreamerThread_1::atomicFrame;
 std::atomic<int> GstreamerThread_1::framecount;
 QMutex GstreamerThread_1::mtxFrame;
 QWaitCondition GstreamerThread_1::frameReadyCond;
@@ -9,7 +9,7 @@ QWaitCondition GstreamerThread_1::frameReadyCond;
 GstreamerThread_1::GstreamerThread_1(int port, QObject *parent) : QThread(parent), m_port(port)
 {
     mContinue = false;
-    GstreamerThread_1::atomicFrame = nullptr;
+    GstreamerThread_1::atomicFrame.exchange(nullptr);
     GstreamerThread_1::framecount.exchange(0);
 
     fpsTimer.setSingleShot(false);
@@ -36,12 +36,12 @@ void GstreamerThread_1::run()
 #ifdef USE_GPU_ACCEL
     pipe =  "udpsrc port="+QString::number(m_port)+" "
             "! application/x-rtp, payload=96 ! rtph264depay ! parsebin ! d3d11h264dec "
-            "! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
+            "! videoconvert ! video/x-raw,format=(string)BGR "
             "! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true";
-#elif
+#else
     pipe =  "udpsrc port="+QString::number(m_port)+" "
             "! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! parsebin ! avdec_h264 "
-            "! decodebin ! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
+            "! decodebin ! videoconvert ! video/x-raw,format=(string)BGR "
             "! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true";
 #endif
     gchar *descr = g_strdup(pipe.toStdString().c_str());
@@ -92,11 +92,11 @@ void GstreamerThread_1::run()
         if(b){
             GstreamerThread_1::mtxFrame.lock();
             GstreamerThread_1::frameReadyCond.wait(&GstreamerThread_1::mtxFrame);
-            frame = GstreamerThread_1::atomicFrame;
+            frame = GstreamerThread_1::atomicFrame.load();
             if(frame != nullptr) {
-                if(!frame->isNull())
-                    emit signalNewFrame(QImage(frame->copy()));
+                emit signalNewFrame(frame->copy());
             }
+            frame = nullptr;
             GstreamerThread_1::mtxFrame.unlock();
         }else{
             QThread::currentThread()->msleep(600);
@@ -145,14 +145,16 @@ GstFlowReturn GstreamerThread_1::new_sample(GstAppSink *appsink, gpointer /*data
     GstMapInfo map;
     gst_buffer_map(buffer, &map, GST_MAP_READ);
 
-    // Convert gstreamer data to OpenCV Mat
-
-    QImage* prevFrame = GstreamerThread_1::atomicFrame;
-    if(prevFrame) {
-        delete prevFrame;
+    if(map.data){
+        QImage* prevFrame = GstreamerThread_1::atomicFrame.load();
+        if(prevFrame) {
+            delete prevFrame;
+        }
+        GstreamerThread_1::mtxFrame.lock();
+        GstreamerThread_1::atomicFrame.store(new QImage((uchar*)map.data, width, height, QImage::Format_BGR888));
+        GstreamerThread_1::mtxFrame.unlock();
+        GstreamerThread_1::frameReadyCond.wakeAll();
     }
-    GstreamerThread_1::atomicFrame = new QImage((uchar*)map.data, width, height, QImage::Format_BGR888);
-    GstreamerThread_1::frameReadyCond.wakeAll();
 
     gst_buffer_unmap(buffer, &map);
     gst_sample_unref(sample);
@@ -211,17 +213,21 @@ gboolean GstreamerThread_1::my_bus_callback(GstBus *bus, GstMessage *message, gp
 void GstreamerThread_1::play()
 {
     QMutexLocker varname(&playPauseMtx);
-    mContinue = true;
-    fpsTimer.start(1000);
-    GstreamerThread_1::frameReadyCond.wakeAll();
+    if(!mContinue){
+        GstreamerThread_1::framecount.exchange(0);
+        fpsTimer.start(1000);
+        GstreamerThread_1::frameReadyCond.wakeAll();
+        mContinue = true;
+    }
 }
 
 void GstreamerThread_1::pause()
 {
     QMutexLocker varname(&playPauseMtx);
-    mContinue = false;
-    fpsTimer.stop();
-    GstreamerThread_1::frameReadyCond.wakeAll();
+    if(mContinue){
+        mContinue = false;
+        fpsTimer.stop();
+    }
 }
 
 
