@@ -16,15 +16,15 @@ MainWindow::MainWindow(QWidget *parent)
     ui->graphicsView->scene()->addItem(&imgItem_1);
     ui->graphicsView_2->setScene(new QGraphicsScene);
     ui->graphicsView_2->scene()->addItem(&imgItem_2);
-    pipelineThrd_1 = new GstreamerThread_1(5000);
-    pipelineThrd_2 = new GstreamerThread_2(5001);
-    connect(pipelineThrd_1, &GstreamerThread_1::signalNewFrame, this ,&MainWindow::slotDisplayImage_1);
-    connect(pipelineThrd_2, &GstreamerThread_2::signalNewFrame, this ,&MainWindow::slotDisplayImage_2);
+    pipelineThrd_1 = new GstreamerThread(5000);
+    pipelineThrd_2 = new GstreamerThread(5001);
+    connect(pipelineThrd_1, &GstreamerThread::signalNewFrame, this ,&MainWindow::slotDisplayImage_1);
+    connect(pipelineThrd_2, &GstreamerThread::signalNewFrame, this ,&MainWindow::slotDisplayImage_2);
 
-    connect(pipelineThrd_1, &GstreamerThread_1::signalFPS, this ,[=](int num){
+    connect(pipelineThrd_1, &GstreamerThread::signalFPS, this ,[=](int num){
         ui->labelFps->setText(QString::number(num)+" fps");
     });
-    connect(pipelineThrd_2, &GstreamerThread_2::signalFPS, this ,[=](int num){
+    connect(pipelineThrd_2, &GstreamerThread::signalFPS, this ,[=](int num){
         ui->labelFps_2->setText(QString::number(num)+" fps");
     });
     pipelineThrd_1->start();

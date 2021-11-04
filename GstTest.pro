@@ -9,14 +9,12 @@ CONFIG += c++20
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    GstreamerThread_1.cpp \
-    GstreamerThread_2.cpp \
+    GstreamerThread.cpp \
     main.cpp \
     MainWindow.cpp
 
 HEADERS += \
-    GstreamerThread_1.h \
-    GstreamerThread_2.h \
+    GstreamerThread.h \
     MainWindow.h
 
 FORMS += \

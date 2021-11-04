@@ -10,8 +10,7 @@
 #include <QOpenGLWidget>
 #endif
 
-#include "GstreamerThread_1.h"
-#include "GstreamerThread_2.h"
+#include "GstreamerThread.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -23,8 +22,8 @@ class MainWindow : public QMainWindow
 {
     Q_OBJECT
     QGraphicsPixmapItem imgItem_1, imgItem_2;
-    GstreamerThread_1* pipelineThrd_1 = nullptr;
-    GstreamerThread_2* pipelineThrd_2 = nullptr;
+    GstreamerThread* pipelineThrd_1 = nullptr;
+    GstreamerThread* pipelineThrd_2 = nullptr;
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();

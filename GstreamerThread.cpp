@@ -1,37 +1,32 @@
-#include "GstreamerThread_1.h"
-
-std::atomic<QImage*> GstreamerThread_1::atomicFrame;
-std::atomic<int> GstreamerThread_1::framecount;
-QMutex GstreamerThread_1::mtxFrame;
-QWaitCondition GstreamerThread_1::frameReadyCond;
+#include "GstreamerThread.h"
 
 
-GstreamerThread_1::GstreamerThread_1(int port, QObject *parent) : QThread(parent), m_port(port)
+GstreamerThread::GstreamerThread(int port, QObject *parent) : QThread(parent), m_port(port)
 {
     mContinue = false;
-    GstreamerThread_1::atomicFrame.exchange(nullptr);
-    GstreamerThread_1::framecount.exchange(0);
+    this->atomicFrame.exchange(nullptr);
+    this->framecount.exchange(0);
 
     fpsTimer.setSingleShot(false);
     connect(&fpsTimer, &QTimer::timeout, this, [=](){
-//        qDebug() << "GstreamerThread_1::FPS" << GstreamerThread::framecount;
-        emit signalFPS(GstreamerThread_1::framecount);
-        GstreamerThread_1::framecount.exchange(0);
+//        qDebug() << "GstreamerThread::FPS" << this->framecount;
+        emit signalFPS(this->framecount);
+        this->framecount.exchange(0);
     });
 }
 
-GstreamerThread_1::~GstreamerThread_1()
+GstreamerThread::~GstreamerThread()
 {
     mDestroy = true;
     this->wait();
 }
 
-void GstreamerThread_1::run()
+void GstreamerThread::run()
 {
     int argc = 0;
     char **argv;
     gst_init(&argc, &argv);
-    qDebug() << "GstreamerThread_1::run - 0";
+    qDebug() << "GstreamerThread::run - 0";
     QString pipe;
 #ifdef USE_GPU_ACCEL
     pipe =  "udpsrc port="+QString::number(m_port)+" "
@@ -46,7 +41,7 @@ void GstreamerThread_1::run()
 #endif
     gchar *descr = g_strdup(pipe.toStdString().c_str());
 
-    qDebug() << "GstreamerThread_1::run - 1";
+    qDebug() << "GstreamerThread::run - 1";
     // Check pipeline
     GError *error = nullptr;
     pipeline = gst_parse_launch(descr, &error);
@@ -58,7 +53,7 @@ void GstreamerThread_1::run()
         g_error_free(error);
         return;
     }
-    qDebug() << "GstreamerThread_1::run - 1.1";
+    qDebug() << "GstreamerThread::run - 1.1";
 
     // Get sink
     GstElement *sink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
@@ -70,14 +65,14 @@ void GstreamerThread_1::run()
     gst_app_sink_set_emit_signals((GstAppSink*)sink, true);
     gst_app_sink_set_drop((GstAppSink*)sink, true);
     gst_app_sink_set_max_buffers((GstAppSink*)sink, 1);
-    GstAppSinkCallbacks callbacks = { nullptr, GstreamerThread_1::new_preroll, GstreamerThread_1::new_sample };
-    gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, nullptr, nullptr);
+    GstAppSinkCallbacks callbacks = { nullptr, GstreamerThread::new_preroll, GstreamerThread::new_sample };
+    gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, this, nullptr); //this is the gpointer on callbacks
 
-    qDebug() << "GstreamerThread_1::run - 2";
+    qDebug() << "GstreamerThread::run - 2";
     // Declare bus
     GstBus *bus;
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
-    gst_bus_add_watch(bus, GstreamerThread_1::my_bus_callback, nullptr);
+    gst_bus_add_watch(bus, GstreamerThread::my_bus_callback, this); //this is the gpointer on callbacks
     gst_object_unref(bus);
 
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_PLAYING);
@@ -90,20 +85,20 @@ void GstreamerThread_1::run()
         playPauseMtx.unlock();
         g_main_iteration(false);
         if(b){
-            GstreamerThread_1::mtxFrame.lock();
-            GstreamerThread_1::frameReadyCond.wait(&GstreamerThread_1::mtxFrame);
-            frame = GstreamerThread_1::atomicFrame.load();
+            this->mtxFrame.lock();
+            this->frameReadyCond.wait(&this->mtxFrame);
+            frame = this->atomicFrame.load();
             if(frame != nullptr) {
                 emit signalNewFrame(frame->copy());
             }
             frame = nullptr;
-            GstreamerThread_1::mtxFrame.unlock();
+            this->mtxFrame.unlock();
         }else{
             QThread::currentThread()->msleep(600);
         }
     }
     //////////////////////////////////////////////////////////////////////////////
-    qDebug() << "GstreamerThread_1::run - end";
+    qDebug() << "GstreamerThread::run - end";
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_NULL);
     gst_object_unref(GST_OBJECT(pipeline));
     this->exit();
@@ -114,7 +109,7 @@ void GstreamerThread_1::run()
  *  https://gstreamer.freedesktop.org/documentation/design/preroll.html
  * @return GstFlowReturn
  */
-GstFlowReturn GstreamerThread_1::new_preroll(GstAppSink* /*appsink*/, gpointer /*data*/)
+GstFlowReturn GstreamerThread::new_preroll(GstAppSink* /*appsink*/, gpointer /*data*/)
 {
     return GST_FLOW_OK;
 }
@@ -125,9 +120,10 @@ GstFlowReturn GstreamerThread_1::new_preroll(GstAppSink* /*appsink*/, gpointer /
  * @param appsink
  * @return GstFlowReturn
  */
-GstFlowReturn GstreamerThread_1::new_sample(GstAppSink *appsink, gpointer /*data*/)
+GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer data)
 {
     // Get caps and frame
+    GstreamerThread *obj = static_cast<GstreamerThread*>(data);
     GstSample *sample = gst_app_sink_pull_sample(appsink);
     GstCaps *caps = gst_sample_get_caps(sample);
     GstBuffer *buffer = gst_sample_get_buffer(sample);
@@ -139,22 +135,23 @@ GstFlowReturn GstreamerThread_1::new_sample(GstAppSink *appsink, gpointer /*data
 //    if(!GstreamerThread::framecount) {
 //        g_print("caps: %s\n", gst_caps_to_string(caps));
 //    }
-    GstreamerThread_1::framecount++;
+    obj->framecount++;
 
     // Get frame data
     GstMapInfo map;
     gst_buffer_map(buffer, &map, GST_MAP_READ);
 
     if(map.data){
-        QImage* prevFrame = GstreamerThread_1::atomicFrame.load();
+        QImage* prevFrame = obj->atomicFrame.load();
         if(prevFrame) {
             delete prevFrame;
         }
-        GstreamerThread_1::mtxFrame.lock();
-        GstreamerThread_1::atomicFrame.store(new QImage((uchar*)map.data, width, height, QImage::Format_BGR888));
-        GstreamerThread_1::mtxFrame.unlock();
-        GstreamerThread_1::frameReadyCond.wakeAll();
+        obj->mtxFrame.lock();
+        obj->atomicFrame.store(new QImage((uchar*)map.data, width, height, QImage::Format_BGR888));
+        obj->mtxFrame.unlock();
+        obj->frameReadyCond.wakeAll();
     }
+
 
     gst_buffer_unmap(buffer, &map);
     gst_sample_unref(sample);
@@ -171,10 +168,10 @@ GstFlowReturn GstreamerThread_1::new_sample(GstAppSink *appsink, gpointer /*data
  * @param data
  * @return gboolean
  */
-gboolean GstreamerThread_1::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
+gboolean GstreamerThread::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
 {
     // Debug message
-    g_print("GstreamerThread_1::bus_callback Got %s message\n", GST_MESSAGE_TYPE_NAME(message));
+    g_print("GstreamerThread_1::bus_callback - %u - Got %s message\n", data, GST_MESSAGE_TYPE_NAME(message));
     switch(GST_MESSAGE_TYPE(message)) {
         case GST_MESSAGE_ERROR: {
             GError *err;
@@ -191,7 +188,7 @@ gboolean GstreamerThread_1::my_bus_callback(GstBus *bus, GstMessage *message, gp
             g_print("end-of-stream");
             break;
     case GST_MESSAGE_STREAM_START:
-        g_print("GstreamerThread_1::Ready to stream\n");
+        g_print("GstreamerThread::Ready to stream\n");
         //we have available stream no need to watch buss again
         break;
         default:
@@ -210,18 +207,19 @@ gboolean GstreamerThread_1::my_bus_callback(GstBus *bus, GstMessage *message, gp
 
 
 
-void GstreamerThread_1::play()
+
+void GstreamerThread::play()
 {
     QMutexLocker varname(&playPauseMtx);
     if(!mContinue){
-        GstreamerThread_1::framecount.exchange(0);
+        this->framecount.exchange(0);
         fpsTimer.start(1000);
-        GstreamerThread_1::frameReadyCond.wakeAll();
+        this->frameReadyCond.wakeAll();
         mContinue = true;
     }
 }
 
-void GstreamerThread_1::pause()
+void GstreamerThread::pause()
 {
     QMutexLocker varname(&playPauseMtx);
     if(mContinue){
