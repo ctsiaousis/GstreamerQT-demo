@@ -1,5 +1,5 @@
-#ifndef GSTREAMERTHREAD_H
-#define GSTREAMERTHREAD_H
+#ifndef GSTREAMERTHREAD_1_H
+#define GSTREAMERTHREAD_1_H
 
 #include <atomic>
 #include <QThread>
@@ -12,7 +12,7 @@
 #include <gst/gst.h>
 #include <gst/app/app.h>
 
-class GstreamerThread : public QThread
+class GstreamerThread_1 : public QThread
 {
     Q_OBJECT
     GstElement *pipeline = nullptr;
@@ -22,8 +22,8 @@ class GstreamerThread : public QThread
     QTimer fpsTimer;
     int m_port;
 public:
-    explicit GstreamerThread(int port, QObject *parent = nullptr);
-    ~GstreamerThread();
+    explicit GstreamerThread_1(int port, QObject *parent = nullptr);
+    ~GstreamerThread_1();
     static QImage* atomicFrame;
     static QMutex mtxFrame;
     static QWaitCondition frameReadyCond;
@@ -44,4 +44,4 @@ signals:
     void signalFPS(int);
 };
 
-#endif // GSTREAMERTHREAD_H
+#endif // GSTREAMERTHREAD_1_H

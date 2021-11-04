@@ -6,8 +6,12 @@
 #include <QMessageBox>
 #include <QGraphicsPixmapItem>
 
-#include "GstreamerThread.h"
-#include "GstreamerThread_NIR.h"
+#ifdef USE_GPU_ACCEL
+#include <QOpenGLWidget>
+#endif
+
+#include "GstreamerThread_1.h"
+#include "GstreamerThread_2.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -18,9 +22,9 @@ QT_END_NAMESPACE
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
-    QGraphicsPixmapItem imgItem_rgb,imgItem_nir;
-    GstreamerThread* pipelineThrd_rgb = nullptr;
-    GstreamerThread_NIR* pipelineThrd_nir = nullptr;
+    QGraphicsPixmapItem imgItem_1, imgItem_2;
+    GstreamerThread_1* pipelineThrd_1 = nullptr;
+    GstreamerThread_2* pipelineThrd_2 = nullptr;
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
@@ -28,8 +32,8 @@ public:
 private:
     Ui::MainWindow *ui;
 private slots:
-    void slotDisplayImage_rgb(QImage im);
-    void slotDisplayImage_nir(QImage im);
+    void slotDisplayImage_1(QImage im);
+    void slotDisplayImage_2(QImage im);
     void on_btnStart_clicked();
     void on_btnStop_clicked();
 

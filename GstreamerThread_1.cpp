@@ -1,45 +1,52 @@
-#include "GstreamerThread.h"
+#include "GstreamerThread_1.h"
 
-QImage* GstreamerThread::atomicFrame;
-std::atomic<int> GstreamerThread::framecount;
-QMutex GstreamerThread::mtxFrame;
-QWaitCondition GstreamerThread::frameReadyCond;
+QImage* GstreamerThread_1::atomicFrame;
+std::atomic<int> GstreamerThread_1::framecount;
+QMutex GstreamerThread_1::mtxFrame;
+QWaitCondition GstreamerThread_1::frameReadyCond;
 
 
-GstreamerThread::GstreamerThread(int port, QObject *parent) : QThread(parent), m_port(port)
+GstreamerThread_1::GstreamerThread_1(int port, QObject *parent) : QThread(parent), m_port(port)
 {
     mContinue = false;
-    GstreamerThread::atomicFrame = nullptr;
-    GstreamerThread::framecount.exchange(0);
+    GstreamerThread_1::atomicFrame = nullptr;
+    GstreamerThread_1::framecount.exchange(0);
 
     fpsTimer.setSingleShot(false);
     connect(&fpsTimer, &QTimer::timeout, this, [=](){
-//        qDebug() << "GstreamerThread::FPS" << GstreamerThread::framecount;
-        emit signalFPS(GstreamerThread::framecount);
-        GstreamerThread::framecount.exchange(0);
+//        qDebug() << "GstreamerThread_1::FPS" << GstreamerThread::framecount;
+        emit signalFPS(GstreamerThread_1::framecount);
+        GstreamerThread_1::framecount.exchange(0);
     });
 }
 
-GstreamerThread::~GstreamerThread()
+GstreamerThread_1::~GstreamerThread_1()
 {
     mDestroy = true;
     this->wait();
 }
 
-void GstreamerThread::run()
+void GstreamerThread_1::run()
 {
     int argc = 0;
     char **argv;
     gst_init(&argc, &argv);
-    qDebug() << "GstreamerThread::run - 0";
-    QString pipe =
-            "udpsrc port="+QString::number(m_port)+" "
-            "! application/x-rtp, payload=96 ! rtph264depay ! queue ! h264parse ! parsebin ! avdec_h264 "
+    qDebug() << "GstreamerThread_1::run - 0";
+    QString pipe;
+#ifdef USE_GPU_ACCEL
+    pipe =  "udpsrc port="+QString::number(m_port)+" "
+            "! application/x-rtp, payload=96 ! rtph264depay ! parsebin ! d3d11h264dec "
+            "! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
+            "! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true";
+#elif
+    pipe =  "udpsrc port="+QString::number(m_port)+" "
+            "! application/x-rtp, payload=96 ! rtph264depay ! h264parse ! parsebin ! avdec_h264 "
             "! decodebin ! videoconvert ! video/x-raw,format=(string)BGR ! videoconvert "
             "! appsink name=sink emit-signals=true sync=false max-buffers=1 drop=true";
+#endif
     gchar *descr = g_strdup(pipe.toStdString().c_str());
 
-    qDebug() << "GstreamerThread::run - 1";
+    qDebug() << "GstreamerThread_1::run - 1";
     // Check pipeline
     GError *error = nullptr;
     pipeline = gst_parse_launch(descr, &error);
@@ -51,7 +58,7 @@ void GstreamerThread::run()
         g_error_free(error);
         return;
     }
-    qDebug() << "GstreamerThread::run - 1.1";
+    qDebug() << "GstreamerThread_1::run - 1.1";
 
     // Get sink
     GstElement *sink = gst_bin_get_by_name(GST_BIN(pipeline), "sink");
@@ -63,14 +70,14 @@ void GstreamerThread::run()
     gst_app_sink_set_emit_signals((GstAppSink*)sink, true);
     gst_app_sink_set_drop((GstAppSink*)sink, true);
     gst_app_sink_set_max_buffers((GstAppSink*)sink, 1);
-    GstAppSinkCallbacks callbacks = { nullptr, GstreamerThread::new_preroll, GstreamerThread::new_sample };
+    GstAppSinkCallbacks callbacks = { nullptr, GstreamerThread_1::new_preroll, GstreamerThread_1::new_sample };
     gst_app_sink_set_callbacks(GST_APP_SINK(sink), &callbacks, nullptr, nullptr);
 
-    qDebug() << "GstreamerThread::run - 2";
+    qDebug() << "GstreamerThread_1::run - 2";
     // Declare bus
     GstBus *bus;
     bus = gst_pipeline_get_bus(GST_PIPELINE(pipeline));
-    gst_bus_add_watch(bus, GstreamerThread::my_bus_callback, nullptr);
+    gst_bus_add_watch(bus, GstreamerThread_1::my_bus_callback, nullptr);
     gst_object_unref(bus);
 
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_PLAYING);
@@ -83,20 +90,20 @@ void GstreamerThread::run()
         playPauseMtx.unlock();
         g_main_iteration(false);
         if(b){
-            GstreamerThread::mtxFrame.lock();
-            GstreamerThread::frameReadyCond.wait(&GstreamerThread::mtxFrame);
-            frame = GstreamerThread::atomicFrame;
+            GstreamerThread_1::mtxFrame.lock();
+            GstreamerThread_1::frameReadyCond.wait(&GstreamerThread_1::mtxFrame);
+            frame = GstreamerThread_1::atomicFrame;
             if(frame != nullptr) {
                 if(!frame->isNull())
                     emit signalNewFrame(QImage(frame->copy()));
             }
-            GstreamerThread::mtxFrame.unlock();
+            GstreamerThread_1::mtxFrame.unlock();
         }else{
             QThread::currentThread()->msleep(600);
         }
     }
     //////////////////////////////////////////////////////////////////////////////
-    qDebug() << "GstreamerThread::run - end";
+    qDebug() << "GstreamerThread_1::run - end";
     gst_element_set_state(GST_ELEMENT(pipeline), GST_STATE_NULL);
     gst_object_unref(GST_OBJECT(pipeline));
     this->exit();
@@ -107,7 +114,7 @@ void GstreamerThread::run()
  *  https://gstreamer.freedesktop.org/documentation/design/preroll.html
  * @return GstFlowReturn
  */
-GstFlowReturn GstreamerThread::new_preroll(GstAppSink* /*appsink*/, gpointer /*data*/)
+GstFlowReturn GstreamerThread_1::new_preroll(GstAppSink* /*appsink*/, gpointer /*data*/)
 {
     return GST_FLOW_OK;
 }
@@ -118,7 +125,7 @@ GstFlowReturn GstreamerThread::new_preroll(GstAppSink* /*appsink*/, gpointer /*d
  * @param appsink
  * @return GstFlowReturn
  */
-GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer /*data*/)
+GstFlowReturn GstreamerThread_1::new_sample(GstAppSink *appsink, gpointer /*data*/)
 {
     // Get caps and frame
     GstSample *sample = gst_app_sink_pull_sample(appsink);
@@ -132,7 +139,7 @@ GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer /*data*/
 //    if(!GstreamerThread::framecount) {
 //        g_print("caps: %s\n", gst_caps_to_string(caps));
 //    }
-    GstreamerThread::framecount++;
+    GstreamerThread_1::framecount++;
 
     // Get frame data
     GstMapInfo map;
@@ -140,12 +147,12 @@ GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer /*data*/
 
     // Convert gstreamer data to OpenCV Mat
 
-    QImage* prevFrame = GstreamerThread::atomicFrame;
+    QImage* prevFrame = GstreamerThread_1::atomicFrame;
     if(prevFrame) {
         delete prevFrame;
     }
-    GstreamerThread::atomicFrame = new QImage((uchar*)map.data, width, height, QImage::Format_BGR888);
-    GstreamerThread::frameReadyCond.wakeAll();
+    GstreamerThread_1::atomicFrame = new QImage((uchar*)map.data, width, height, QImage::Format_BGR888);
+    GstreamerThread_1::frameReadyCond.wakeAll();
 
     gst_buffer_unmap(buffer, &map);
     gst_sample_unref(sample);
@@ -162,10 +169,10 @@ GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer /*data*/
  * @param data
  * @return gboolean
  */
-gboolean GstreamerThread::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
+gboolean GstreamerThread_1::my_bus_callback(GstBus *bus, GstMessage *message, gpointer data)
 {
     // Debug message
-    g_print("Got %s message\n", GST_MESSAGE_TYPE_NAME(message));
+    g_print("GstreamerThread_1::bus_callback Got %s message\n", GST_MESSAGE_TYPE_NAME(message));
     switch(GST_MESSAGE_TYPE(message)) {
         case GST_MESSAGE_ERROR: {
             GError *err;
@@ -182,7 +189,7 @@ gboolean GstreamerThread::my_bus_callback(GstBus *bus, GstMessage *message, gpoi
             g_print("end-of-stream");
             break;
     case GST_MESSAGE_STREAM_START:
-        g_print("GstreamerThread::Ready to stream\n");
+        g_print("GstreamerThread_1::Ready to stream\n");
         //we have available stream no need to watch buss again
         break;
         default:
@@ -201,20 +208,20 @@ gboolean GstreamerThread::my_bus_callback(GstBus *bus, GstMessage *message, gpoi
 
 
 
-void GstreamerThread::play()
+void GstreamerThread_1::play()
 {
     QMutexLocker varname(&playPauseMtx);
     mContinue = true;
     fpsTimer.start(1000);
-    GstreamerThread::frameReadyCond.wakeAll();
+    GstreamerThread_1::frameReadyCond.wakeAll();
 }
 
-void GstreamerThread::pause()
+void GstreamerThread_1::pause()
 {
     QMutexLocker varname(&playPauseMtx);
     mContinue = false;
     fpsTimer.stop();
-    GstreamerThread::frameReadyCond.wakeAll();
+    GstreamerThread_1::frameReadyCond.wakeAll();
 }
 
 

@@ -1,5 +1,5 @@
-#ifndef GSTREAMERTHREAD_NIR_H
-#define GSTREAMERTHREAD_NIR_H
+#ifndef GSTREAMERTHREAD_2_H
+#define GSTREAMERTHREAD_2_H
 
 #include <atomic>
 #include <QThread>
@@ -13,13 +13,14 @@
 #include <gst/app/app.h>
 
 /*!
- * \brief The GstreamerThread_NIR class is exactly the same
- * with the GstreamerThread class. I implemented it this way
+ * \brief The GstreamerThread_2 class is exactly the same
+ * with the GstreamerThread_1 class. I implemented it this way
  * due to the static callback functions and variables. If you
- * find a better way to use the same class please contact me:
+ * find a way to utilize polymorphism when dealing with static
+ * member variables please contact me:
  *  ctsiaous@gmail.com
  */
-class GstreamerThread_NIR : public QThread
+class GstreamerThread_2 : public QThread
 {
     Q_OBJECT
     GstElement *pipeline = nullptr;
@@ -29,8 +30,8 @@ class GstreamerThread_NIR : public QThread
     QTimer fpsTimer;
     int m_port;
 public:
-    explicit GstreamerThread_NIR(int port, QObject *parent = nullptr);
-    ~GstreamerThread_NIR();
+    explicit GstreamerThread_2(int port, QObject *parent = nullptr);
+    ~GstreamerThread_2();
     static QImage* atomicFrame;
     static QMutex mtxFrame;
     static QWaitCondition frameReadyCond;

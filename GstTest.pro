@@ -9,14 +9,14 @@ CONFIG += c++20
 #DEFINES += QT_DISABLE_DEPRECATED_BEFORE=0x060000    # disables all the APIs deprecated before Qt 6.0.0
 
 SOURCES += \
-    GstreamerThread.cpp \
-    GstreamerThread_NIR.cpp \
+    GstreamerThread_1.cpp \
+    GstreamerThread_2.cpp \
     main.cpp \
     MainWindow.cpp
 
 HEADERS += \
-    GstreamerThread.h \
-    GstreamerThread_NIR.h \
+    GstreamerThread_1.h \
+    GstreamerThread_2.h \
     MainWindow.h
 
 FORMS += \
@@ -54,7 +54,8 @@ INCLUDEPATH += "C:\gstreamer\1.0\msvc_x86_64\lib\gstreamer-1.0"
 
 
 
-
+# --------------------------------- PRE PROCESSOR VARIABLES ---------------------------------
+DEFINES += USE_GPU_ACCEL
 
 
 
