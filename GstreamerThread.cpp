@@ -90,6 +90,7 @@ void GstreamerThread::run()
             frame = this->atomicFrame.load();
             if(frame != nullptr) {
                 emit signalNewFrame(frame->copy());
+                delete frame;
             }
             frame = nullptr;
             this->mtxFrame.unlock();
@@ -142,10 +143,10 @@ GstFlowReturn GstreamerThread::new_sample(GstAppSink *appsink, gpointer data)
     gst_buffer_map(buffer, &map, GST_MAP_READ);
 
     if(map.data){
-        QImage* prevFrame = obj->atomicFrame.load();
-        if(prevFrame) {
-            delete prevFrame;
-        }
+//        QImage* prevFrame = obj->atomicFrame.load();
+//        if(prevFrame) {
+//            delete prevFrame;
+//        }
         obj->mtxFrame.lock();
         obj->atomicFrame.store(new QImage((uchar*)map.data, width, height, QImage::Format_BGR888));
         obj->mtxFrame.unlock();
