@@ -18,6 +18,7 @@ class GStreamerThread : public QThread
     int m_port = 5000;
 public:
     explicit GStreamerThread(int port, QObject *parent = nullptr);
+    ~GStreamerThread();
     GMainLoop *loop;
     GstElement *pipeline, *appsrc, *conv, *payloader, *udpsink, *videoenc;
     GstClockTime timestamp = 0;

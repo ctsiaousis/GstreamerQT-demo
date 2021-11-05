@@ -8,6 +8,13 @@ GStreamerThread::GStreamerThread(int port, QObject *parent)
     frame.fill(Qt::gray);
 }
 
+GStreamerThread::~GStreamerThread()
+{
+    g_main_loop_quit (loop);
+    this->exit();
+    this->wait();
+}
+
 
 void GStreamerThread::cb_need_data (GstAppSrc *appsrc, guint unused_size ,gpointer user_data)
 {
