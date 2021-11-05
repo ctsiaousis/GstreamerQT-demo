@@ -19,5 +19,9 @@ gst-launch-1.0 videotestsrc ! video/x-raw,width=3040,height=2048 ! videoconvert 
 *Note:* 
 This generates CPU accelerated `videotestsrc`. If you want/need GPU acceleration for the h264 encoding use either: `omxh264enc` or `d3d11h264dec`, depending on availability and your hardware.
 
+#### Stream with `GstTestServer/GstTestServer.pro`
+Build the server project and run it.
+
+___
 #### Build the `GstTest.pro`
 and test your configuration. Once you are happy with it, you can stream different types of media (i.e. files, webstreams, v4l devices and more).
